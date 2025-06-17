@@ -1,6 +1,6 @@
 {
   "name": "@pentestpad/tiptap-extension-figure",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "An extension for Tiptap that allows you to add and edit captions for images as well as align and resize them.",
   "license": "MIT",
   "main": "dist/index.cjs.js",
