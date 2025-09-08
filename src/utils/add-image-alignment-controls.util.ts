@@ -14,17 +14,17 @@ const imageAlignmentControls: ImageAlignmentControls[] = [
   {
     type: "left",
     icon: leftIcon,
-    styleToApply: "margin: 0 auto 0 0;",
+    styleToApply: "display: block; margin-right: auto; margin: 0 auto 0 0;",
   },
   {
     type: "center",
     icon: centerIcon,
-    styleToApply: "margin: 0 auto;",
+    styleToApply: "display: block; margin-left: auto; margin-right: auto; margin: 0 auto;",
   },
   {
     type: "right",
     icon: rightIcon,
-    styleToApply: "margin: 0 0 0 auto;",
+    styleToApply: "display: block; margin-left: auto; margin: 0 0 0 auto;",
   },
 ];
 
