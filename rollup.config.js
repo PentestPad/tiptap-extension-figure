@@ -1,14 +1,15 @@
 // rollup.config.js
 
 const autoExternal = require("rollup-plugin-auto-external");
-const sourcemaps = require("rollup-plugin-sourcemaps");
 const commonjs = require("@rollup/plugin-commonjs");
 const babel = require("@rollup/plugin-babel");
 const typescript = require("rollup-plugin-typescript2");
 const url = require("@rollup/plugin-url");
 const postcss = require("rollup-plugin-postcss");
 
+/** @type {import('rollup').RollupOptions} */
 const config = {
+  external: [/^prosemirror-/],
   input: "src/index.ts",
   output: [
     {
@@ -26,13 +27,14 @@ const config = {
   ],
   plugins: [
     autoExternal({ packagePath: "./package.json" }),
-    sourcemaps({ include: "node_modules/**" }),
     babel({
       babelHelpers: "bundled",
       exclude: "node_modules/**",
     }),
     commonjs(),
-    typescript(),
+    typescript({
+      useTsconfigDeclarationDir: true,
+    }),
     url({
       include: ["**/*.svg"],
       limit: Infinity, // Embed all assets
