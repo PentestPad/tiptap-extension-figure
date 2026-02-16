@@ -1,6 +1,6 @@
 {
   "name": "@pentestpad/tiptap-extension-figure",
-  "version": "1.0.11",
+  "version": "1.1.0",
   "description": "An extension for Tiptap that allows you to add and edit captions for images as well as align and resize them.",
   "license": "MIT",
   "main": "dist/index.cjs.js",
@@ -15,20 +15,19 @@
     "@rollup/plugin-babel": "^6.0.4",
     "@rollup/plugin-commonjs": "^28.0.2",
     "@rollup/plugin-url": "^8.0.2",
-    "@tiptap/core": "^2.11.5",
-    "@tiptap/extension-image": "^2.11.5",
-    "@tiptap/pm": "^2.11.5",
+    "@tiptap/core": "^3.19.0",
+    "@tiptap/extension-image": "^3.19.0",
+    "@tiptap/pm": "^3.19.0",
     "rollup": "^4.34.8",
     "rollup-plugin-auto-external": "^2.0.0",
     "rollup-plugin-postcss": "^4.0.2",
-    "rollup-plugin-sourcemaps": "^0.6.3",
     "rollup-plugin-typescript2": "^0.36.0",
-    "typescript": "^5.7.3"
+    "typescript": "^5.9.3"
   },
   "peerDependencies": {
-    "@tiptap/core": "^2.0.0",
-    "@tiptap/extension-image": "^2.0.0",
-    "@tiptap/pm": "^2.0.0"
+    "@tiptap/core": "^3.19.0",
+    "@tiptap/extension-image": "^3.19.0",
+    "@tiptap/pm": "^3.19.0"
   },
   "repository": {
     "type": "git",

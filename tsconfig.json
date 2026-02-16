@@ -5,6 +5,7 @@
     "lib": ["es2020", "dom"],
     "moduleResolution": "node",
     "declaration": true,
+    "declarationDir": "dist",
     "outDir": "dist",
     "noEmit": false,
     "rootDir": "./src"
