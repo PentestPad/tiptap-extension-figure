@@ -21,6 +21,8 @@ declare module "@tiptap/core" {
         src: string;
         alt?: string;
         title?: string;
+        width?: string | number;
+        height?: string | number;
       }) => ReturnType;
     };
   }
@@ -78,6 +80,24 @@ const TiptapImageFigureExtension = ImageExtension.extend<ImageOptions>({
         parseHTML: (element) => {
           const img = element.querySelector("img");
           return img?.getAttribute("title");
+        },
+      },
+      width: {
+        default: null,
+        parseHTML: (element) => {
+          if (element.tagName === "FIGURE") {
+            return element.querySelector("img")?.getAttribute("width");
+          }
+          return element.getAttribute("width");
+        },
+      },
+      height: {
+        default: null,
+        parseHTML: (element) => {
+          if (element.tagName === "FIGURE") {
+            return element.querySelector("img")?.getAttribute("height");
+          }
+          return element.getAttribute("height");
         },
       },
       style: {
@@ -141,8 +161,9 @@ const TiptapImageFigureExtension = ImageExtension.extend<ImageOptions>({
     const hasCaption = node.content.size > 0;
 
     if (hasCaption) {
-      // We should ignore src, alt and title from html attributes if the wrapper element is a figure
-      const { src, alt, title, ...figureHtmlAttributes } = HTMLAttributes;
+      // We should ignore img-only attributes if the wrapper element is a figure
+      const { src, alt, title, width, height, ...figureHtmlAttributes } =
+        HTMLAttributes;
 
       return [
         "figure",
@@ -281,7 +302,19 @@ const TiptapImageFigureExtension = ImageExtension.extend<ImageOptions>({
           startWidth,
           styles,
           () => {
-            dispatchNodeView();
+            // Persist the rendered dimensions so they survive serialization
+            if (typeof getPos === "function") {
+              const newAttrs = {
+                ...node.attrs,
+                width: imageElement.offsetWidth,
+                height: imageElement.offsetHeight,
+                style: imageElement.style.cssText,
+              };
+              editor.view.dispatch(
+                editor.view.state.tr.setNodeMarkup(getPos(), null, newAttrs)
+              );
+              this.storage.elementsVisible = false;
+            }
             editor.commands.focus();
           }
         );
