@@ -82,3 +82,28 @@
 .image-alignment-control:hover {
   opacity: 0.5;
 }
+
+.delete-controls-element {
+  position: absolute;
+  top: 0%;
+  right: 0%;
+  width: 40px;
+  height: 35px;
+  background-color: rgba(255, 255, 255, 0.7);
+  border-radius: 4px;
+  border: 2px solid #6c6c6c;
+  cursor: pointer;
+  transform: translate(0, -50%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.delete-image-button {
+  cursor: pointer;
+  font-size: 20px;
+}
+
+.delete-image-button:hover {
+  opacity: 0.5;
+}
