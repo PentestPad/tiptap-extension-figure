@@ -5,6 +5,7 @@ import { removeImageControlsAndResetStyles } from "../utils/remove-image-control
 import { addImageAlignmentControls } from "../utils/add-image-alignment-controls.util";
 import { addImageResizeControls } from "../utils/add-image-resize-controls.util";
 import { addCaptionControls } from "../utils/add-caption-controls.util";
+import { addImageDeleteControls } from "../utils/add-image-delete-controls.util";
 import {
   changeImageToFigure,
   changeFigureToImage,
@@ -302,6 +303,17 @@ const TiptapImageFigureExtension = ImageExtension.extend<ImageOptions>({
             this.storage.elementsVisible = false;
           }
         );
+
+        addImageDeleteControls(wrapperElement, styles, () => {
+          // On image delete, remove the entire node from the document
+          if (typeof getPos === "function") {
+            const pos = getPos();
+            editor.view.dispatch(
+              editor.view.state.tr.delete(pos, pos + node.nodeSize)
+            );
+          }
+          this.storage.elementsVisible = false;
+        });
 
         this.storage.elementsVisible = true;
       });
