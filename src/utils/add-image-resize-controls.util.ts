@@ -1,14 +1,21 @@
 import { isMobileScreen } from "./is-mobile-screen.util";
 
-export const addImageResizeControls = (
-  wrapperElement: HTMLElement,
-  imageElement: HTMLImageElement,
-  isResizing: boolean,
-  startX: number,
-  startWidth: number,
+const minimumWidth = 48;
+
+export const createImageResizeControls = (
   styles: Record<string, string>,
-  onResize: () => void
-) => {
+  {
+    getStartWidth,
+    getMaximumWidth,
+    onResize,
+    onResizeEnd,
+  }: {
+    getStartWidth: () => number;
+    getMaximumWidth: () => number;
+    onResize: (width: number) => void;
+    onResizeEnd: (width: number, hasChanged: boolean) => void;
+  }
+): HTMLElement[] => {
   const isMobile = isMobileScreen();
   const dotPosition = isMobile ? "-8px" : "-4px";
   const dotSize = isMobile ? 16 : 9;
@@ -19,42 +26,43 @@ export const addImageResizeControls = (
     `bottom: ${dotPosition}; right: ${dotPosition}; cursor: nwse-resize;`,
   ];
 
-  Array.from({ length: 4 }, (_, index) => {
+  return dotsPosition.map((dotStyle, index) => {
     const dotElement = document.createElement("div");
     dotElement.setAttribute("class", styles["dot-element"]);
     dotElement.setAttribute(
       "style",
-      `width: ${dotSize}px; height: ${dotSize}px; ${dotsPosition[index]}`
+      `width: ${dotSize}px; height: ${dotSize}px; ${dotStyle}`
     );
 
-    dotElement.addEventListener("mousedown", (e) => {
-      e.preventDefault();
-      isResizing = true;
-      startX = e.clientX;
-      startWidth = wrapperElement.offsetWidth;
+    const startResizing = (startX: number) => {
+      const startWidth = getStartWidth();
+      const maximumWidth = getMaximumWidth();
+      let currentWidth = startWidth;
 
-      const onMouseMove = (event: MouseEvent) => {
-        if (!isResizing) {
-          return;
-        }
-
-        const deltaX =
-          index % 2 === 0 ? -(event.clientX - startX) : event.clientX - startX;
-
-        const newWidth = startWidth + deltaX;
-        wrapperElement.style.width = newWidth + "px";
-        imageElement.style.width = newWidth + "px";
+      const resizeTo = (clientX: number) => {
+        const deltaX = index % 2 === 0 ? startX - clientX : clientX - startX;
+        currentWidth = Math.round(
+          Math.min(maximumWidth, Math.max(minimumWidth, startWidth + deltaX))
+        );
+        onResize(currentWidth);
       };
 
+      const finishResizing = () =>
+        onResizeEnd(currentWidth, currentWidth !== startWidth);
+
+      return { resizeTo, finishResizing };
+    };
+
+    dotElement.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+      const { resizeTo, finishResizing } = startResizing(event.clientX);
+
+      const onMouseMove = (moveEvent: MouseEvent) =>
+        resizeTo(moveEvent.clientX);
       const onMouseUp = () => {
-        if (isResizing) {
-          isResizing = false;
-        }
-
-        onResize();
-
         document.removeEventListener("mousemove", onMouseMove);
         document.removeEventListener("mouseup", onMouseUp);
+        finishResizing();
       };
 
       document.addEventListener("mousemove", onMouseMove);
@@ -63,34 +71,18 @@ export const addImageResizeControls = (
 
     dotElement.addEventListener(
       "touchstart",
-      (e) => {
-        e.cancelable && e.preventDefault();
-        isResizing = true;
-        startX = e.touches[0].clientX;
-        startWidth = wrapperElement.offsetWidth;
+      (event) => {
+        event.cancelable && event.preventDefault();
+        const { resizeTo, finishResizing } = startResizing(
+          event.touches[0].clientX
+        );
 
-        const onTouchMove = (e: TouchEvent) => {
-          if (!isResizing) return;
-
-          const deltaX =
-            index % 2 === 0
-              ? -(e.touches[0].clientX - startX)
-              : e.touches[0].clientX - startX;
-
-          const newWidth = startWidth + deltaX;
-          wrapperElement.style.width = newWidth + "px";
-          imageElement.style.width = newWidth + "px";
-        };
-
+        const onTouchMove = (moveEvent: TouchEvent) =>
+          resizeTo(moveEvent.touches[0].clientX);
         const onTouchEnd = () => {
-          if (isResizing) {
-            isResizing = false;
-          }
-
-          onResize();
-
           document.removeEventListener("touchmove", onTouchMove);
           document.removeEventListener("touchend", onTouchEnd);
+          finishResizing();
         };
 
         document.addEventListener("touchmove", onTouchMove);
@@ -99,6 +91,6 @@ export const addImageResizeControls = (
       { passive: false }
     );
 
-    wrapperElement.appendChild(dotElement);
+    return dotElement;
   });
 };

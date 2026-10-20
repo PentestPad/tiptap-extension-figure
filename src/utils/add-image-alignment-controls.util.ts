@@ -1,42 +1,19 @@
-type ImageAlignmentControlType = "left" | "center" | "right";
-
-interface ImageAlignmentControls {
-  type: ImageAlignmentControlType;
-  icon: string;
-  styleToApply: string;
-}
-
 import leftIcon from "../assets/icons/format-align-left.svg";
 import centerIcon from "../assets/icons/format-align-center.svg";
 import rightIcon from "../assets/icons/format-align-right.svg";
+import { ImageAlignment } from "./image-style.util";
 
-const imageAlignmentControls: ImageAlignmentControls[] = [
-  {
-    type: "left",
-    icon: leftIcon,
-    styleToApply: "display: block; margin-right: auto; margin: 0 auto 0 0;",
-  },
-  {
-    type: "center",
-    icon: centerIcon,
-    styleToApply: "display: block; margin-left: auto; margin-right: auto; margin: 0 auto;",
-  },
-  {
-    type: "right",
-    icon: rightIcon,
-    styleToApply: "display: block; margin-left: auto; margin: 0 0 0 auto;",
-  },
+const imageAlignmentControls: { type: ImageAlignment; icon: string }[] = [
+  { type: "left", icon: leftIcon },
+  { type: "center", icon: centerIcon },
+  { type: "right", icon: rightIcon },
 ];
 
-export const addImageAlignmentControls = (
-  wrapperElement: HTMLElement,
-  imageElement: HTMLImageElement,
+export const createImageAlignmentControls = (
   styles: Record<string, string>,
-  onAlign: () => void
-) => {
+  onAlign: (alignment: ImageAlignment) => void
+): HTMLElement => {
   const imageAlignmentContainer = document.createElement("div");
-
-  imageAlignmentContainer.setAttribute("contenteditable", "false");
   imageAlignmentContainer.setAttribute(
     "class",
     styles["image-alignment-container"]
@@ -45,18 +22,21 @@ export const addImageAlignmentControls = (
   imageAlignmentControls.forEach((imageControl) => {
     const imageAlignmentControl = document.createElement("img");
     imageAlignmentControl.src = imageControl.icon;
+    imageAlignmentControl.draggable = false;
     imageAlignmentControl.setAttribute(
       "class",
       styles["image-alignment-control"]
     );
+    imageAlignmentControl.addEventListener("mousedown", (event) =>
+      event.preventDefault()
+    );
     imageAlignmentControl.addEventListener("click", (event) => {
-      event.stopPropagation();
-      imageElement.style.cssText = `${imageElement.style.cssText} ${imageControl.styleToApply}`;
-      onAlign();
+      event.preventDefault();
+      onAlign(imageControl.type);
     });
 
     imageAlignmentContainer.appendChild(imageAlignmentControl);
   });
 
-  wrapperElement.appendChild(imageAlignmentContainer);
+  return imageAlignmentContainer;
 };
