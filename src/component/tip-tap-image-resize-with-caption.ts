@@ -1,18 +1,18 @@
 import { mergeAttributes, nodeInputRule } from "@tiptap/core";
 import ImageExtension, { ImageOptions } from "@tiptap/extension-image";
-import { isMobileScreen } from "../utils/is-mobile-screen.util";
-import { removeImageControlsAndResetStyles } from "../utils/remove-image-controls.util";
-import { addImageAlignmentControls } from "../utils/add-image-alignment-controls.util";
-import { addImageResizeControls } from "../utils/add-image-resize-controls.util";
-import { addCaptionControls } from "../utils/add-caption-controls.util";
-import {
-  changeImageToFigure,
-  changeFigureToImage,
-} from "../utils/replace-element.util";
+import { NodeSelection, TextSelection, Transaction } from "@tiptap/pm/state";
+import { createImageAlignmentControls } from "../utils/add-image-alignment-controls.util";
+import { createImageResizeControls } from "../utils/add-image-resize-controls.util";
+import { createCaptionControls } from "../utils/add-caption-controls.util";
+import { alignImageStyle, resizeImageStyle } from "../utils/image-style.util";
 
 import styles from "../assets/styles/styles.css";
 
 export const inputRegex = /!\[(.+|:?)]\((\S+)(?:(?:\s+)["'](\S+)["'])?\)/;
+
+const captionPlaceholder = "Write a caption…";
+
+const imageAttributes = ["src", "alt", "title", "width", "height"];
 
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
@@ -25,6 +25,22 @@ declare module "@tiptap/core" {
     };
   }
 }
+
+const setAttributeIfChanged = (
+  element: HTMLElement,
+  name: string,
+  value: string | null
+) => {
+  if (value === null) {
+    element.removeAttribute(name);
+
+    return;
+  }
+
+  if (element.getAttribute(name) !== value) {
+    element.setAttribute(name, value);
+  }
+};
 
 const TiptapImageFigureExtension = ImageExtension.extend<ImageOptions>({
   addOptions() {
@@ -45,13 +61,6 @@ const TiptapImageFigureExtension = ImageExtension.extend<ImageOptions>({
   content: "inline*",
 
   name: "imageFigure",
-
-  addStorage() {
-    return {
-      elementsVisible: false,
-      currentActiveWrapper: null as HTMLElement | null,
-    };
-  },
 
   addAttributes() {
     return {
@@ -85,8 +94,6 @@ const TiptapImageFigureExtension = ImageExtension.extend<ImageOptions>({
         default: "width: 100%; height: auto; cursor: pointer;",
         parseHTML: (element) => {
           const width = element.getAttribute("width");
-          // const img = element.querySelector("img");
-          // const width = img?.getAttribute("width");
           return width
             ? `width: ${width}px; height: auto; cursor: pointer;`
             : `${element.style.cssText}`;
@@ -158,173 +165,216 @@ const TiptapImageFigureExtension = ImageExtension.extend<ImageOptions>({
     return ["img", mergeAttributes(HTMLAttributes)];
   },
 
-  addNodeView() {
-    return ({ node, editor, getPos }) => {
-      const dispatchNodeView = () => {
-        if (typeof getPos === "function") {
-          const newAttrs = {
-            ...node.attrs,
-            style: imageElement.style.cssText,
-          };
-          editor.view.dispatch(
-            editor.view.state.tr.setNodeMarkup(getPos(), null, newAttrs)
-          );
-          this.storage.elementsVisible = false;
+  addKeyboardShortcuts() {
+    return {
+      Enter: ({ editor }) => {
+        const { $from } = editor.state.selection;
+
+        if ($from.parent.type !== this.type) {
+          return false;
         }
-      };
 
-      const {
-        options: { editable },
-      } = editor;
-      const { style } = node.attrs;
+        return editor.commands.command(({ tr }) => {
+          const position = $from.after();
+          const blockType = $from
+            .node(-1)
+            .contentMatchAt($from.indexAfter(-1)).defaultType;
 
-      // Create wrapper based on content
-      const wrapperElement = document.createElement(
-        node.content.size > 0 ? "figure" : "div"
-      );
+          if (!blockType) {
+            return false;
+          }
+
+          tr.insert(position, blockType.create());
+          tr.setSelection(TextSelection.create(tr.doc, position + 1));
+
+          return true;
+        });
+      },
+    };
+  },
+
+  addNodeView() {
+    return ({ node: initialNode, editor, getPos }) => {
+      let node = initialNode;
+      let isResizing = false;
+
+      const wrapperElement = document.createElement("figure");
       wrapperElement.setAttribute("class", styles["wrapper-element"]);
-      wrapperElement.setAttribute("style", style);
+      wrapperElement.contentEditable = "false";
 
       const imageElement = document.createElement("img");
       wrapperElement.appendChild(imageElement);
 
       const captionElement = document.createElement("figcaption");
+      captionElement.setAttribute("class", styles["caption-element"]);
+      captionElement.contentEditable = "true";
+      captionElement.dataset.placeholder = captionPlaceholder;
+      wrapperElement.appendChild(captionElement);
 
-      // Set up image attributes
-      Object.entries(node.attrs).forEach(([key, value]) => {
-        if (value === undefined || value === null) {
+      const isSelectionInCaption = () => {
+        const position = getPos();
+        const { selection } = editor.state;
+
+        return (
+          position !== undefined &&
+          selection instanceof TextSelection &&
+          selection.from > position &&
+          selection.to < position + node.nodeSize
+        );
+      };
+
+      const selectImage = (transaction: Transaction, position: number) =>
+        transaction.setSelection(
+          NodeSelection.create(transaction.doc, position)
+        );
+
+      const updateNodeStyle = (style: string) => {
+        const position = getPos();
+
+        if (position === undefined) {
           return;
         }
-        imageElement.setAttribute(key, value);
-      });
 
-      // Add caption if needed
-      if (node.content.size > 0) {
-        captionElement.setAttribute("class", styles["caption-element"]);
-        captionElement.setAttribute("contenteditable", "true");
-        wrapperElement.appendChild(captionElement);
-
-        captionElement.addEventListener("click", (event) => {
-          // Do not propagate click event to the wrapper element
-          event.stopPropagation();
+        const transaction = editor.state.tr.setNodeMarkup(position, undefined, {
+          ...node.attrs,
+          style,
         });
-      }
+        editor.view.dispatch(selectImage(transaction, position));
+      };
 
-      if (!editable) return { dom: wrapperElement, contentDOM: captionElement };
+      const toggleCaption = () => {
+        const position = getPos();
 
-      // Initialize control variables
-      let isResizing = false;
-      let startX = 0;
-      let startWidth = 0;
-
-      // Handle click on container
-      wrapperElement.addEventListener("click", (event) => {
-        event.stopPropagation();
-        event.preventDefault();
-
-        editor.commands.setNodeSelection(getPos());
-
-        // If controls are already visible, check if another image or figure is being clicked on
-        if (this.storage.elementsVisible) {
-          const clickedElement = event.target as HTMLElement;
-          const currentActiveWrapper = this.storage.currentActiveWrapper;
-
-          // Check if the clicked element is a child of the current active wrapper
-          // If it isn't, we must remove the controls from the previous wrapper and continue
-          // If it is, we do nothing
-          if (
-            currentActiveWrapper &&
-            currentActiveWrapper.contains(clickedElement)
-          ) {
-            return;
-          }
-
-          if (currentActiveWrapper) {
-            removeImageControlsAndResetStyles(
-              clickedElement,
-              currentActiveWrapper,
-              styles
-            );
-          }
+        if (position === undefined) {
+          return;
         }
 
-        this.storage.currentActiveWrapper = wrapperElement;
-
-        const isMobile = isMobileScreen();
-        if (isMobile) {
-          const focusedElement = document.querySelector(
-            ".ProseMirror-focused"
-          ) as HTMLElement | null;
-          focusedElement?.blur();
-        }
-
-        // Remove existing controls first
-        removeImageControlsAndResetStyles(
-          event.target as HTMLElement,
-          wrapperElement,
-          styles
-        );
-
-        // Show new controls
-        wrapperElement.classList.toggle(styles["active"]);
-
-        addImageAlignmentControls(wrapperElement, imageElement, styles, () => {
-          dispatchNodeView();
-          editor.commands.focus();
-        });
-
-        addImageResizeControls(
-          wrapperElement,
-          imageElement,
-          isResizing,
-          startX,
-          startWidth,
-          styles,
-          () => {
-            dispatchNodeView();
-            editor.commands.focus();
-          }
-        );
-
-        addCaptionControls(
-          wrapperElement,
-          styles,
-          () => {
-            // On caption remove
-            changeFigureToImage(this.editor, wrapperElement);
-
-            this.storage.elementsVisible = false;
-          },
-          () => {
-            // On caption add
-            changeImageToFigure(this.editor, wrapperElement, captionElement);
-
-            this.storage.elementsVisible = false;
-          }
-        );
-
-        this.storage.elementsVisible = true;
-      });
-
-      // Handle clicks outside
-      document.addEventListener("click", (event) => {
-        if (!wrapperElement.contains(event.target as Node)) {
-          removeImageControlsAndResetStyles(
-            event.target as HTMLElement,
-            wrapperElement,
-            styles
+        if (node.content.size > 0) {
+          const transaction = editor.state.tr.delete(
+            position + 1,
+            position + node.nodeSize - 1
           );
-          this.storage.elementsVisible = false;
-          this.storage.currentActiveWrapper = null;
+          editor.view.dispatch(selectImage(transaction, position));
+
+          return;
         }
+
+        captionElement.hidden = false;
+        editor.view.dispatch(
+          editor.state.tr.setSelection(
+            TextSelection.create(editor.state.doc, position + 1)
+          )
+        );
+        editor.view.focus();
+      };
+
+      const syncAttributes = () => {
+        if (!isResizing) {
+          setAttributeIfChanged(wrapperElement, "style", node.attrs.style);
+          setAttributeIfChanged(imageElement, "style", node.attrs.style);
+        }
+
+        imageAttributes.forEach((attribute) => {
+          const value = node.attrs[attribute];
+          setAttributeIfChanged(
+            imageElement,
+            attribute,
+            value === null || value === undefined ? null : String(value)
+          );
+        });
+      };
+
+      const captionControls = createCaptionControls(styles, toggleCaption);
+
+      const syncCaption = () => {
+        const hasCaption = node.content.size > 0;
+
+        captionElement.hidden =
+          !hasCaption && !(editor.isEditable && isSelectionInCaption());
+        captionElement.classList.toggle(styles["caption-empty"], !hasCaption);
+        captionControls.setHasCaption(hasCaption);
+      };
+
+      const controlsElement = document.createElement("div");
+      controlsElement.setAttribute("class", styles["controls-element"]);
+      controlsElement.append(
+        createImageAlignmentControls(styles, (alignment) =>
+          updateNodeStyle(alignImageStyle(node.attrs.style, alignment))
+        ),
+        captionControls.element,
+        ...createImageResizeControls(styles, {
+          getStartWidth: () => imageElement.offsetWidth,
+          getMaximumWidth: () =>
+            wrapperElement.parentElement?.clientWidth ?? Infinity,
+          onResize: (width) => {
+            isResizing = true;
+            wrapperElement.style.width = `${width}px`;
+            imageElement.style.width = `${width}px`;
+          },
+          onResizeEnd: (width, hasChanged) => {
+            isResizing = false;
+
+            if (hasChanged) {
+              updateNodeStyle(resizeImageStyle(node.attrs.style, width));
+
+              return;
+            }
+
+            syncAttributes();
+          },
+        })
+      );
+      wrapperElement.appendChild(controlsElement);
+
+      imageElement.addEventListener("click", () => {
+        const position = getPos();
+
+        if (!editor.isEditable || position === undefined) {
+          return;
+        }
+
+        editor.view.dispatch(selectImage(editor.state.tr, position));
+        editor.view.focus();
       });
+
+      editor.on("selectionUpdate", syncCaption);
+
+      syncAttributes();
+      syncCaption();
 
       return {
         dom: wrapperElement,
-        contentDOM: node.content.size > 0 ? captionElement : undefined,
-        ignoreMutation: (mutation) => {
-          // We must ignore mutations that happened outside the captionElement
-          return !captionElement.contains(mutation.target);
+        contentDOM: captionElement,
+        update: (updatedNode) => {
+          if (updatedNode.type !== node.type) {
+            return false;
+          }
+
+          node = updatedNode;
+          syncAttributes();
+          syncCaption();
+
+          return true;
+        },
+        selectNode: () => {
+          wrapperElement.classList.add("ProseMirror-selectednode");
+
+          if (editor.isEditable) {
+            wrapperElement.classList.add(styles["active"]);
+          }
+        },
+        deselectNode: () => {
+          wrapperElement.classList.remove(
+            "ProseMirror-selectednode",
+            styles["active"]
+          );
+        },
+        stopEvent: (event) => controlsElement.contains(event.target as Node),
+        ignoreMutation: (mutation) =>
+          mutation.type === "attributes" ||
+          !captionElement.contains(mutation.target),
+        destroy: () => {
+          editor.off("selectionUpdate", syncCaption);
         },
       };
     };

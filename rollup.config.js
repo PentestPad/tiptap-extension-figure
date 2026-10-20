@@ -9,7 +9,7 @@ const postcss = require("rollup-plugin-postcss");
 
 /** @type {import('rollup').RollupOptions} */
 const config = {
-  external: [/^prosemirror-/],
+  external: [/^prosemirror-/, /^@tiptap\//],
   input: "src/index.ts",
   output: [
     {
